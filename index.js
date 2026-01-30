@@ -234,7 +234,9 @@ app.post("/api/register", async (req, res) => {
 
 app.post("/api/login", async (req, res) => {
   try {
-    await dbConnect(); // Ensure DB connection first
+    await dbConnect();
+    console.log("Login payload:", req.body);
+
     const user = await User.findOne({ email: req.body.email });
     if (!user) return res.status(400).json({ message: "User not found" });
     if (user.isBanned) return res.status(403).json({ message: "Your account is banned" });
@@ -245,8 +247,8 @@ app.post("/api/login", async (req, res) => {
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
     res.json({ token, user });
   } catch (error) {
-      console.error("LOGIN ERROR:", error);
-    res.status(500).json({ message: "Failed to login" });
+    console.error("LOGIN ERROR:", error);
+    res.status(500).json({ message: error.message });
   }
 });
 
