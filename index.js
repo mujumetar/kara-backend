@@ -3,7 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const cors = require("cors");
+// const cors = require("cors");
 const multer = require("multer");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
@@ -14,34 +14,22 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 app.use(express.json());
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://kara-ent.vercel.app"
-];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
 
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
-  res.setHeader("Access-Control-Allow-Credentials", "true");
+const cors = require("cors");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://kara-ent.vercel.app"
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
-  next();
-});
-
+// ✅ SAFE for Express 4 + Vercel
+app.options(/.*/, cors());
 
 
 /* ================= CONFIG ================= */
@@ -76,8 +64,8 @@ const upload = multer({ storage });
 
 /* ================= RAZORPAY ================= */
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY,
-  key_secret: process.env.RAZORPAY_SECRET,
+  key_id: process.env.RAZORPAY_KEY,       // rzp_test_XXXX
+  key_secret: process.env.RAZORPAY_SECRET // 9oRhO0XXXX
 });
 
 /* ================= MODELS ================= */
@@ -396,7 +384,7 @@ async function sendAdminSMS(message) {
         try {
           await client.messages.create({
             body: message,
-            from: process.env.TWILIO_PHONE ,
+            from: process.env.TWILIO_PHONE,
             to: admin.phone
           });
           console.log(`SMS sent to ${admin.phone}`);
@@ -1001,7 +989,7 @@ app.post("/api/payment/create-order", auth, async (req, res) => {
 app.post("/api/payment/verify", auth, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-    const expected = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    const expected = crypto.createHmac("sha256", process.env.RAZORPAY_SECRET)
       .update(razorpay_order_id + "|" + razorpay_payment_id)
       .digest("hex");
     if (expected !== razorpay_signature) return res.status(400).json({ message: "Payment verification failed" });
