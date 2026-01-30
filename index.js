@@ -1,9 +1,7 @@
-
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-// const cors = require("cors");
 const multer = require("multer");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
@@ -11,45 +9,33 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("cloudinary").v2;
 const twilio = require("twilio");
 const nodemailer = require("nodemailer");
-
+const cors = require("cors");
+const serverless = require("serverless-http");
+require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-
-const cors = require("cors");
-
-
+/* ================= CORS ================= */
 const corsOptions = {
   origin: ["https://kara-ent.vercel.app", "http://localhost:5173"],
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
   allowedHeaders: ["Content-Type","Authorization"],
   credentials: true
 };
-
 app.use(cors(corsOptions));
-
-// Allow preflight requests for all routes
-// app.options("*", cors(corsOptions));
-
-
-// ✅ SAFE for Express 4 + Vercel
 app.options(/.*/, cors(corsOptions));
 
-
 /* ================= CONFIG ================= */
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || "supersecretjwtkey";
 
-// Twilio configuration - In production, use environment variables
 const client = twilio(
   process.env.TWILIO_SID || 'AC8cef5806b7ff1158a3f8b1cab10d580f',
   process.env.TWILIO_AUTH_TOKEN || '91f6a0ce2de2d16e683620c6049f76bb'
 );
-
 const TWILIO_PHONE = process.env.TWILIO_PHONE || '+12055457341';
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
+/* ================= DATABASE ================= */
+mongoose.connect(process.env.MONGO_URI).then(() => console.log("MongoDB Connected"))
   .catch(console.error);
 
 /* ================= CLOUDINARY ================= */
@@ -61,192 +47,107 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: { folder: "flipkart", allowed_formats: ["jpg", "png", "jpeg"] },
+  params: { folder: "flipkart", allowed_formats: ["jpg","png","jpeg"] },
 });
-
 const upload = multer({ storage });
 
 /* ================= RAZORPAY ================= */
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY,       // rzp_test_XXXX
-  key_secret: process.env.RAZORPAY_SECRET // 9oRhO0XXXX
+  key_id: process.env.RAZORPAY_KEY,
+  key_secret: process.env.RAZORPAY_SECRET
 });
 
 /* ================= MODELS ================= */
-const User = mongoose.model(
-  "User",
-  new mongoose.Schema(
-    {
-      name: String,
-      email: { type: String, unique: true },
-      password: String,
-      phone: String,
-      role: { type: String, default: "user" },
+const User = mongoose.model("User", new mongoose.Schema({
+  name: String,
+  email: { type: String, unique: true },
+  password: String,
+  phone: String,
+  role: { type: String, default: "user" },
+  isBanned: { type: Boolean, default: false },
+  profileImage: String,
+  supercoins: { type: Number, default: 0 },
+  addresses: { type: Array, default: [] },
+  cart: [{
+    productId: String,
+    title: String,
+    price: Number,
+    quantity: { type: Number, default: 1 },
+    image: String
+  }]
+}, { timestamps: true }));
 
-      isBanned: {
-        type: Boolean,
-        default: false,
-      },
+const Category = mongoose.model("Category", new mongoose.Schema({
+  name: String,
+  subcategories: [String]
+}));
 
-      profileImage: String,
-      supercoins: { type: Number, default: 0 },
-      addresses: { type: Array, default: [] },
-
-      cart: [
-        {
-          productId: String,
-          title: String,
-          price: Number,
-          quantity: { type: Number, default: 1 },
-          image: String,
-        },
-      ],
-    },
-    { timestamps: true }
-  )
-);
-
-
-const Category = mongoose.model(
-  "Category",
-  new mongoose.Schema({
+const ProductSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  price: { type: Number, required: true },
+  images: [String],
+  category: String,
+  subcategory: String,
+  description: String,
+  stock: Number,
+  reviews: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     name: String,
-    subcategories: [String],
-  })
-);
-
-const ProductSchema = new mongoose.Schema(
-  {
-    title: { type: String, required: true },
-    price: { type: Number, required: true },
-    images: [String],
-    category: String,
-    subcategory: String,
-    description: String,
-    stock: Number,
-
-    // ⭐ REVIEWS
-    reviews: [
-      {
-        userId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
-          required: true
-        },
-        name: String, // optional, fallback to user.name
-        rating: {
-          type: Number,
-          min: 1,
-          max: 5,
-          required: true
-        },
-        comment: String,
-        createdAt: { type: Date, default: Date.now }
-      }
-    ],
-
-    avgRating: { type: Number, default: 0 }
-  },
-  { timestamps: true }
-);
+    rating: { type: Number, min: 1, max: 5, required: true },
+    comment: String,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  avgRating: { type: Number, default: 0 }
+}, { timestamps: true });
 
 const Product = mongoose.model("Product", ProductSchema);
 
-const renderTemplate = (html, data = {}) => {
-  return html.replace(/\{\{(.*?)\}\}/g, (_, key) => {
-    return data[key.trim()] ?? "";
-  });
-};
+const renderTemplate = (html, data = {}) => html.replace(/\{\{(.*?)\}\}/g, (_, key) => data[key.trim()] ?? "");
 
-
-const Order = mongoose.model(
-  "Order",
-  new mongoose.Schema(
-    {
-      userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User"
-      },
-      products: [
-        {
-          _id: String,
-          title: String,
-          price: Number,
-          quantity: Number,
-        },
-      ],
-      address: Object,
-      paymentId: String,
-      totalAmount: { type: Number, required: true },
-
-      status: {
-        type: String,
-        enum: ["Pending", "Processing", "Confirmed", "Shipped", "Delivered"],
-        default: "Pending",
-      },
-    },
-    { timestamps: true }
-  )
-);
-
-
-const Slider = mongoose.model(
-  "Slider",
-  new mongoose.Schema({
+const Order = mongoose.model("Order", new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  products: [{
+    _id: String,
     title: String,
-    image: String,
-    link: String,
-  })
-);
-// Backend – EmailTemplate schema
-// Replace your current EmailTemplate model with this:
-const EmailTemplate = mongoose.model(
-  "EmailTemplate",
-  new mongoose.Schema(
-    {
-      name: { type: String, required: true },           // Human readable name
-      key: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
-        lowercase: true
-      },
-      subject: { type: String, required: true },
-      html: { type: String, required: true },
-      variables: [String],                             // e.g. ["name", "orderId", "amount"]
-      isActive: { type: Boolean, default: true },
+    price: Number,
+    quantity: Number
+  }],
+  address: Object,
+  paymentId: String,
+  totalAmount: { type: Number, required: true },
+  status: {
+    type: String,
+    enum: ["Pending", "Processing", "Confirmed", "Shipped", "Delivered"],
+    default: "Pending"
+  }
+}, { timestamps: true }));
 
-      // ── NEW FIELD ──
-      type: {
-        type: String,
-        enum: ["transactional", "marketing"],
-        default: "transactional",
-        required: true
-      },
-    },
-    { timestamps: true }
-  )
-);
+const Slider = mongoose.model("Slider", new mongoose.Schema({
+  title: String,
+  image: String,
+  link: String
+}));
 
+const EmailTemplate = mongoose.model("EmailTemplate", new mongoose.Schema({
+  name: { type: String, required: true },
+  key: { type: String, required: true, unique: true, trim: true, lowercase: true },
+  subject: { type: String, required: true },
+  html: { type: String, required: true },
+  variables: [String],
+  isActive: { type: Boolean, default: true },
+  type: { type: String, enum: ["transactional", "marketing"], default: "transactional", required: true }
+}, { timestamps: true }));
 
 /* ================= MIDDLEWARE ================= */
 const auth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ message: "No token" });
-
-  const token = authHeader.startsWith("Bearer ")
-    ? authHeader.split(" ")[1]
-    : authHeader;
-
+  const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : authHeader;
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.id);
-
     if (!user) return res.status(401).json({ message: "User not found" });
-    if (user.isBanned)
-      return res.status(403).json({ message: "User is banned" });
-
+    if (user.isBanned) return res.status(403).json({ message: "User is banned" });
     req.user = { id: user._id };
     next();
   } catch (err) {
@@ -254,77 +155,82 @@ const auth = async (req, res, next) => {
   }
 };
 
-
-
 const adminAuth = async (req, res, next) => {
   const user = await User.findById(req.user.id);
   if (user.role !== "admin") return res.status(403).json({ message: "Admin only" });
   next();
 };
 
-/* ================= AUTH ================= */
+// /* ================= EMAIL ================= */
+// const mailer = nodemailer.createTransport({
+//   service: "gmail",
+//   auth: {
+//     user: process.env.MAIL_USER || "karaentonline@gmail.com",
+//     pass: process.env.MAIL_PASS || "qayz eeiy xika wayy"
+//   }
+// });
+// const sendEmail = async ({ to, subject, html }) => {
+//   await mailer.sendMail({ from: `"Flipkart Clone" <no-reply@karaenterprises.com>`, to, subject, html });
+// };
+
+// /* ================= SMS ================= */
+// const sendAdminSMS = async (message) => {
+//   try {
+//     const admins = await User.find({ role: "admin" });
+//     for (const admin of admins) {
+//       if (admin.phone) {
+//         await client.messages.create({ body: message, from: TWILIO_PHONE, to: admin.phone });
+//       }
+//     }
+//   } catch (err) {
+//     console.error("SMS error:", err);
+//   }
+// };
+
+/* ================= ROUTES ================= */
+/* ---------- AUTH ---------- */
 app.post("/api/register", async (req, res) => {
   try {
     const hashed = await bcrypt.hash(req.body.password, 10);
     const user = await User.create({ ...req.body, password: hashed });
 
-    // ✅ SEND WELCOME EMAIL
+    // WELCOME EMAIL
     try {
-      const template = await EmailTemplate.findOne({
-        key: "welcomeuser",
-        isActive: true
-      });
-
+      const template = await EmailTemplate.findOne({ key: "welcomeuser", isActive: true });
       if (template) {
         const html = renderTemplate(template.html, {
           name: user.name || "Customer",
           websiteUrl: "https://karaenterprises.com",
           year: new Date().getFullYear()
         });
-
-        await sendEmail({
-          to: user.email,
-          subject: template.subject,
-          html
-        });
+        await sendEmail({ to: user.email, subject: template.subject, html });
       }
     } catch (emailError) {
       console.error("WELCOME EMAIL ERROR:", emailError);
-      // ❗ Do not block registration if email fails
     }
 
     res.json(user);
   } catch (error) {
-    if (error.code === 11000) {
-      res.status(400).json({ message: "Email already exists" });
-    } else {
-      console.error(error);
-      res.status(500).json({ message: "Failed to register user" });
-    }
+    if (error.code === 11000) res.status(400).json({ message: "Email already exists" });
+    else res.status(500).json({ message: "Failed to register user" });
   }
 });
-
 
 app.post("/api/login", async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.email });
     if (!user) return res.status(400).json({ message: "User not found" });
-
-    if (user.isBanned)
-      return res.status(403).json({ message: "Your account is banned" });
+    if (user.isBanned) return res.status(403).json({ message: "Your account is banned" });
 
     const match = await bcrypt.compare(req.body.password, user.password);
     if (!match) return res.status(400).json({ message: "Wrong password" });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
     res.json({ token, user });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: "Failed to login" });
   }
 });
-
 
 app.get("/api/admin/users", auth, adminAuth, async (req, res) => {
   try {
@@ -1215,3 +1121,4 @@ app.get("/api/admin/stats", auth, adminAuth, async (req, res) => {
 /* ================= SERVER ================= */
 // app.listen(5000, () => console.log("Server running → http://localhost:5000"));
 module.exports = app;
+module.exports.handler = serverless(app);
