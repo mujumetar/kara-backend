@@ -1193,4 +1193,5 @@ app.get("/api/admin/stats", auth, adminAuth, async (req, res) => {
 });
 
 /* ================= SERVER ================= */
-app.listen(5000, () => console.log("Server running → http://localhost:5000"));
+// app.listen(5000, () => console.log("Server running → http://localhost:5000"));
+module.exports = app;
