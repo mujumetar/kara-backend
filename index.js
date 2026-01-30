@@ -129,7 +129,9 @@ const Slider = mongoose.model("Slider", new mongoose.Schema({
 }));
 
 
+
 let cached = global.mongoose;
+
 if (!cached) cached = global.mongoose = { conn: null, promise: null };
 
 async function dbConnect() {
@@ -137,7 +139,11 @@ async function dbConnect() {
 
   if (!cached.promise) {
     if (!process.env.MONGO_URI) throw new Error("MONGO_URI is not defined");
-    cached.promise = mongoose.connect(process.env.MONGO_URI).then(m => m);
+    cached.promise = mongoose.connect(process.env.MONGO_URI, {
+      bufferCommands: false,
+      // optional: increase timeout for slow networks
+      connectTimeoutMS: 30000
+    }).then(m => m);
   }
 
   cached.conn = await cached.promise;
