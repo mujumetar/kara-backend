@@ -14,7 +14,19 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://kara-ent.vercel.app"
+  ],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+}));
+
+// 🔥 IMPORTANT: handle preflight
+app.options("*", cors());
+
 
 /* ================= CONFIG ================= */
 const JWT_SECRET = process.env.JWT_SECRET;
