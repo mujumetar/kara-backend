@@ -28,7 +28,7 @@ const client = twilio(
 const TWILIO_PHONE = process.env.TWILIO_PHONE || '+12055457341';
 
 mongoose
-  .connect("mongodb://127.0.0.1:27017/flipkart")
+  .connect("mongodb+srv://muzammilmetar82_db_user:3oc9jc3eQT7SD5oQ@kara.nwlx3hc.mongodb.net/?appName=kara")
   .then(() => console.log("MongoDB Connected"))
   .catch(console.error);
 
