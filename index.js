@@ -128,6 +128,22 @@ const Slider = mongoose.model("Slider", new mongoose.Schema({
   link: String
 }));
 
+
+let cached = global.mongoose;
+if (!cached) cached = global.mongoose = { conn: null, promise: null };
+
+async function dbConnect() {
+  if (cached.conn) return cached.conn;
+
+  if (!cached.promise) {
+    if (!process.env.MONGO_URI) throw new Error("MONGO_URI is not defined");
+    cached.promise = mongoose.connect(process.env.MONGO_URI).then(m => m);
+  }
+
+  cached.conn = await cached.promise;
+  return cached.conn;
+}
+
 const EmailTemplate = mongoose.model("EmailTemplate", new mongoose.Schema({
   name: { type: String, required: true },
   key: { type: String, required: true, unique: true, trim: true, lowercase: true },
@@ -218,6 +234,7 @@ app.post("/api/register", async (req, res) => {
 
 app.post("/api/login", async (req, res) => {
   try {
+    await dbConnect(); // Ensure DB connection first
     const user = await User.findOne({ email: req.body.email });
     if (!user) return res.status(400).json({ message: "User not found" });
     if (user.isBanned) return res.status(403).json({ message: "Your account is banned" });
@@ -228,6 +245,7 @@ app.post("/api/login", async (req, res) => {
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
     res.json({ token, user });
   } catch (error) {
+      console.error("LOGIN ERROR:", error);
     res.status(500).json({ message: "Failed to login" });
   }
 });
