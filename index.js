@@ -18,15 +18,20 @@ app.use(express.json());
 
 const cors = require("cors");
 
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://kara-ent.vercel.app"
-  ],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+const cors = require("cors");
+
+const corsOptions = {
+  origin: ["https://kara-ent.vercel.app", "http://localhost:5173"],
+  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
+
+// Allow preflight requests for all routes
+app.options("*", cors(corsOptions));
+
 
 // ✅ SAFE for Express 4 + Vercel
 app.options(/.*/, cors());
