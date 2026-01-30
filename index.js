@@ -14,18 +14,34 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 app.use(express.json());
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://kara-ent.vercel.app"
-  ],
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
-}));
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://kara-ent.vercel.app"
+];
 
-// 🔥 IMPORTANT: handle preflight
-app.options("*", cors());
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  next();
+});
+
 
 
 /* ================= CONFIG ================= */
@@ -985,7 +1001,7 @@ app.post("/api/payment/create-order", auth, async (req, res) => {
 app.post("/api/payment/verify", auth, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-    const expected = crypto.createHmac("sha256", "9oRhO0RA8UZeq8DW78bVupv3")
+    const expected = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(razorpay_order_id + "|" + razorpay_payment_id)
       .digest("hex");
     if (expected !== razorpay_signature) return res.status(400).json({ message: "Payment verification failed" });
