@@ -18,7 +18,6 @@ app.use(express.json());
 
 const cors = require("cors");
 
-const cors = require("cors");
 
 const corsOptions = {
   origin: ["https://kara-ent.vercel.app", "http://localhost:5173"],
@@ -30,11 +29,11 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Allow preflight requests for all routes
-app.options("*", cors(corsOptions));
+// app.options("*", cors(corsOptions));
 
 
 // ✅ SAFE for Express 4 + Vercel
-app.options(/.*/, cors());
+app.options(/.*/, cors(corsOptions));
 
 
 /* ================= CONFIG ================= */
