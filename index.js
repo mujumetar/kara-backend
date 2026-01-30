@@ -17,7 +17,7 @@ app.use(express.json());
 app.use(cors());
 
 /* ================= CONFIG ================= */
-const JWT_SECRET = "flipkart_secret";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Twilio configuration - In production, use environment variables
 const client = twilio(
@@ -28,15 +28,15 @@ const client = twilio(
 const TWILIO_PHONE = process.env.TWILIO_PHONE || '+12055457341';
 
 mongoose
-  .connect("mongodb+srv://muzammilmetar82_db_user:3oc9jc3eQT7SD5oQ@kara.nwlx3hc.mongodb.net/?appName=kara")
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch(console.error);
 
 /* ================= CLOUDINARY ================= */
 cloudinary.config({
-  cloud_name: "dlzy4t3i3",
-  api_key: "983945937919249",
-  api_secret: "_DmbWP5XAr0O1ji7uubfb86rZbY",
+  cloud_name: process.env.CLOUDINARY_NAME,
+  api_key: process.env.CLOUDINARY_KEY,
+  api_secret: process.env.CLOUDINARY_SECRET,
 });
 
 const storage = new CloudinaryStorage({
@@ -48,8 +48,8 @@ const upload = multer({ storage });
 
 /* ================= RAZORPAY ================= */
 const razorpay = new Razorpay({
-  key_id: "rzp_test_RziTV0f7RSbzDC",
-  key_secret: "9oRhO0RA8UZeq8DW78bVupv3",
+  key_id: process.env.RAZORPAY_KEY,
+  key_secret: process.env.RAZORPAY_SECRET,
 });
 
 /* ================= MODELS ================= */
@@ -296,7 +296,7 @@ app.post("/api/login", async (req, res) => {
     const match = await bcrypt.compare(req.body.password, user.password);
     if (!match) return res.status(400).json({ message: "Wrong password" });
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
     res.json({ token, user });
   } catch (error) {
@@ -368,7 +368,7 @@ async function sendAdminSMS(message) {
         try {
           await client.messages.create({
             body: message,
-            from: TWILIO_PHONE,
+            from: process.env.TWILIO_PHONE ,
             to: admin.phone
           });
           console.log(`SMS sent to ${admin.phone}`);
@@ -489,7 +489,7 @@ const mailer = nodemailer.createTransport({
 
 const sendEmail = async ({ to, subject, html }) => {
   await mailer.sendMail({
-    from: `"Flipkart Clone" <${User}>`,
+    from: `"Flipkart Clone" <no-reply@karaenterprises.com>`,
     to,
     subject,
     html
