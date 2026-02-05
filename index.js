@@ -609,7 +609,12 @@ app.delete("/api/categories/:id", auth, adminAuth, async (req, res) => {
 });
 
 /* ================= PRODUCTS ================= */
-app.post("/api/products", auth, adminAuth, async (req, res) => {
+app.post(
+  "/api/products",
+  auth,
+  adminAuth,
+  upload.array("images", 5),
+  async (req, res) => {
   try {
     // Validation for category and subcategory to ensure data integrity for better filtration
     if (req.body.category) {
@@ -622,7 +627,8 @@ app.post("/api/products", auth, adminAuth, async (req, res) => {
       }
     }
 
-    const images = req.files.map((f) => f.path);
+    const images = req.body.images; // array of Cloudinary URLs
+
     const product = await Product.create({ ...req.body, images });
     res.json(product);
   } catch (error) {
