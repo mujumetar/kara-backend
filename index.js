@@ -34,9 +34,6 @@ const client = twilio(
 );
 const TWILIO_PHONE = process.env.TWILIO_PHONE || '+12055457341';
 
-/* ================= DATABASE ================= */
-mongoose.connect(process.env.MONGO_URI).then(() => console.log("MongoDB Connected"))
-  .catch(console.error);
 
 /* ================= CLOUDINARY ================= */
 cloudinary.config({
@@ -180,10 +177,17 @@ const auth = async (req, res, next) => {
 };
 
 const adminAuth = async (req, res, next) => {
-  const user = await User.findById(req.user.id);
-  if (user.role !== "admin") return res.status(403).json({ message: "Admin only" });
-  next();
+  try {
+    await dbConnect();
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== "admin")
+      return res.status(403).json({ message: "Admin only" });
+    next();
+  } catch (err) {
+    res.status(500).json({ message: "Admin auth failed" });
+  }
 };
+
 
 // /* ================= EMAIL ================= */
 // const mailer = nodemailer.createTransport({
