@@ -129,26 +129,27 @@ const Slider = mongoose.model("Slider", new mongoose.Schema({
 }));
 
 
-
 let cached = global.mongoose;
-
 if (!cached) cached = global.mongoose = { conn: null, promise: null };
 
 async function dbConnect() {
   if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
-    if (!process.env.MONGO_URI) throw new Error("MONGO_URI is not defined");
     cached.promise = mongoose.connect(process.env.MONGO_URI, {
       bufferCommands: false,
-      // optional: increase timeout for slow networks
-      connectTimeoutMS: 30000
-    }).then(m => m);
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 30000,
+    }).then(mongoose => {
+      console.log("MongoDB connected");
+      return mongoose;
+    });
   }
 
   cached.conn = await cached.promise;
   return cached.conn;
 }
+
 
 const EmailTemplate = mongoose.model("EmailTemplate", new mongoose.Schema({
   name: { type: String, required: true },
@@ -166,6 +167,7 @@ const auth = async (req, res, next) => {
   if (!authHeader) return res.status(401).json({ message: "No token" });
   const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : authHeader;
   try {
+      await dbConnect();
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.id);
     if (!user) return res.status(401).json({ message: "User not found" });
@@ -213,6 +215,7 @@ const adminAuth = async (req, res, next) => {
 /* ---------- AUTH ---------- */
 app.post("/api/register", async (req, res) => {
   try {
+      await dbConnect();
     const hashed = await bcrypt.hash(req.body.password, 10);
     const user = await User.create({ ...req.body, password: hashed });
 
