@@ -609,7 +609,7 @@ app.delete("/api/categories/:id", auth, adminAuth, async (req, res) => {
 });
 
 /* ================= PRODUCTS ================= */
-app.post("/api/products", auth, adminAuth, upload.array("images", 5), async (req, res) => {
+app.post("/api/products", auth, adminAuth, async (req, res) => {
   try {
     // Validation for category and subcategory to ensure data integrity for better filtration
     if (req.body.category) {
