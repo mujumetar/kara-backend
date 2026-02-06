@@ -19,8 +19,8 @@ app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 /* ================= CORS ================= */
 const corsOptions = {
   origin: ["https://kara-ent.vercel.app", "http://localhost:5173"],
-  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 };
 app.use(cors(corsOptions));
@@ -45,7 +45,7 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: { folder: "flipkart", allowed_formats: ["jpg","png","jpeg"] },
+  params: { folder: "flipkart", allowed_formats: ["jpg", "png", "jpeg"] },
 });
 const upload = multer({
   storage,
@@ -171,7 +171,7 @@ const auth = async (req, res, next) => {
   if (!authHeader) return res.status(401).json({ message: "No token" });
   const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : authHeader;
   try {
-      await dbConnect();
+    await dbConnect();
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.id);
     if (!user) return res.status(401).json({ message: "User not found" });
@@ -226,7 +226,7 @@ const adminAuth = async (req, res, next) => {
 /* ---------- AUTH ---------- */
 app.post("/api/register", async (req, res) => {
   try {
-      await dbConnect();
+    await dbConnect();
     const hashed = await bcrypt.hash(req.body.password, 10);
     const user = await User.create({ ...req.body, password: hashed });
 
@@ -615,27 +615,33 @@ app.post(
   adminAuth,
   upload.array("images", 5),
   async (req, res) => {
-  try {
-    // Validation for category and subcategory to ensure data integrity for better filtration
-    if (req.body.category) {
-      const categoryDoc = await Category.findOne({ name: req.body.category });
-      if (!categoryDoc) {
-        return res.status(400).json({ message: "Category not found" });
+    try {
+      // Validation for category and subcategory to ensure data integrity for better filtration
+      if (req.body.category) {
+        const categoryDoc = await Category.findOne({ name: req.body.category });
+        if (!categoryDoc) {
+          return res.status(400).json({ message: "Category not found" });
+        }
+        if (req.body.subcategory && !categoryDoc.subcategories.includes(req.body.subcategory)) {
+          return res.status(400).json({ message: "Subcategory is not valid for the selected category" });
+        }
       }
-      if (req.body.subcategory && !categoryDoc.subcategories.includes(req.body.subcategory)) {
-        return res.status(400).json({ message: "Subcategory is not valid for the selected category" });
-      }
+
+      const images = Array.isArray(req.body.images)
+        ? req.body.images.filter(Boolean)
+        : [];
+
+      const product = await Product.create({
+        ...req.body,
+        images
+      });
+
+      res.json(product);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to create product" });
     }
-
-    const images = req.body.images; // array of Cloudinary URLs
-
-    const product = await Product.create({ ...req.body, images });
-    res.json(product);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to create product" });
-  }
-});
+  });
 app.get("/api/products", async (req, res) => {
   try {
     const { category, subcategory, minPrice, maxPrice, search } = req.query;
@@ -652,7 +658,7 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
-app.put("/api/products/:id", auth, adminAuth, upload.array("images", 5), async (req, res) => {
+app.put("/api/products/:id", auth, adminAuth, async (req, res) => {
   try {
     const update = { ...req.body };
     if (req.files && req.files.length > 0) {
