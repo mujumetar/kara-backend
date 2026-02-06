@@ -928,56 +928,82 @@ app.delete("/api/slider/:id", auth, adminAuth, async (req, res) => {
 /* ================= RAZORPAY ================= */
 app.post("/api/payment/create-order", auth, async (req, res) => {
   try {
-    const { amount } = req.body;
-    if (!amount || amount <= 0) return res.status(400).json({ message: "Invalid amount" });
+    const { orderId } = req.body;
 
-    const options = {
-      amount: amount * 100, // Razorpay expects paise
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const razorpayOrder = await razorpay.orders.create({
+      amount: order.totalAmount * 100,
       currency: "INR",
-      receipt: "order_" + Date.now(),
-    };
+      receipt: `order_${order._id}`
+    });
 
-    const order = await razorpay.orders.create(options);
-
-    if (!order) return res.status(500).json({ message: "Razorpay order creation failed" });
-
-    res.json(order);
+    res.json({
+      razorpayOrderId: razorpayOrder.id,
+      amount: order.totalAmount,
+      currency: "INR"
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Failed to create payment order" });
+    res.status(500).json({ message: "Failed to create Razorpay order" });
   }
 });
 
 app.post("/api/payment/verify", auth, async (req, res) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-    const expected = crypto.createHmac("sha256", process.env.RAZORPAY_SECRET)
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      orderId
+    } = req.body;
+
+    const expected = crypto
+      .createHmac("sha256", process.env.RAZORPAY_SECRET)
       .update(razorpay_order_id + "|" + razorpay_payment_id)
       .digest("hex");
-    if (expected !== razorpay_signature) return res.status(400).json({ message: "Payment verification failed" });
-    res.json({ success: true });
+
+    if (expected !== razorpay_signature) {
+      return res.status(400).json({ message: "Payment verification failed" });
+    }
+
+    // ✅ UPDATE ORDER
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      {
+        paymentId: razorpay_payment_id,
+        status: "Processing"
+      },
+      { new: true }
+    );
+
+    // clear cart
+    await User.findByIdAndUpdate(order.userId, { cart: [] });
+
+    res.json({ success: true, order });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Failed to verify payment" });
+    res.status(500).json({ message: "Payment verification failed" });
   }
 });
+
 
 /* ================= CHECKOUT ================= */
 app.post("/api/checkout", auth, async (req, res) => {
   try {
-    const { address, paymentId } = req.body;
+    const { address } = req.body;
     const user = await User.findById(req.user.id);
 
     if (!user.cart || user.cart.length === 0) {
       return res.status(400).json({ message: "Cart empty" });
     }
 
-    // ✅ normalize cart → order products
     const products = user.cart.map(item => ({
       _id: item.productId,
       title: item.title,
-      price: Number(item.price) || 0,
-      quantity: Number(item.quantity) || 1
+      price: Number(item.price),
+      quantity: Number(item.quantity)
     }));
 
     const totalAmount = products.reduce(
@@ -985,47 +1011,24 @@ app.post("/api/checkout", auth, async (req, res) => {
       0
     );
 
+    // ✅ CREATE ORDER FIRST (Pending)
     const order = await Order.create({
       userId: user._id,
       products,
       address,
-      paymentId,
       totalAmount,
-      status: "Processing"
+      status: "Pending",
+      paymentId: null
     });
 
-    // Credit supercoins
-    const earnedCoins = Math.floor(totalAmount / 100);
-    if (earnedCoins > 0) {
-      user.supercoins += earnedCoins;
-    }
-
-    user.cart = [];
-    await user.save();
-
-
-    // Send order confirmation email using template
-    const template = await EmailTemplate.findOne({ key: 'orderConfirmed', isActive: true });
-    if (template) {
-      const html = renderTemplate(template.html, {
-        name: user.name,
-        orderId: order._id.toString(),
-        totalAmount: order.totalAmount
-      });
-      await sendEmail({
-        to: user.email,
-        subject: template.subject,
-        html
-      });
-    }
-
-    // Send SMS to admins
-    await sendAdminSMS(`New order #${order._id} placed by ${user.name} for ₹${totalAmount}`);
-
-    res.json(order);
+    res.json({
+      success: true,
+      orderId: order._id,
+      amount: totalAmount
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Failed to process checkout" });
+    res.status(500).json({ message: "Checkout failed" });
   }
 });
 
