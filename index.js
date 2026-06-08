@@ -141,16 +141,25 @@ async function dbConnect() {
 
   if (!cached.promise) {
     cached.promise = mongoose.connect(process.env.MONGO_URI, {
-      bufferCommands: false,
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 30000,
-    }).then(mongoose => {
+      socketTimeoutMS: 45000,
+    }).then(m => {
       console.log("MongoDB connected");
-      return mongoose;
+      return m;
+    }).catch(err => {
+      // Reset so next request retries instead of reusing a failed promise
+      cached.promise = null;
+      throw err;
     });
   }
 
-  cached.conn = await cached.promise;
+  try {
+    cached.conn = await cached.promise;
+  } catch (err) {
+    cached.promise = null;
+    throw err;
+  }
   return cached.conn;
 }
 
@@ -196,33 +205,29 @@ const adminAuth = async (req, res, next) => {
 };
 
 
-// /* ================= EMAIL ================= */
-// const mailer = nodemailer.createTransport({
-//   service: "gmail",
-//   auth: {
-//     user: process.env.MAIL_USER || "karaentonline@gmail.com",
-//     pass: process.env.MAIL_PASS || "qayz eeiy xika wayy"
-//   }
-// });
-// const sendEmail = async ({ to, subject, html }) => {
-//   await mailer.sendMail({ from: `"Flipkart Clone" <no-reply@karaenterprises.com>`, to, subject, html });
-// };
-
-// /* ================= SMS ================= */
-// const sendAdminSMS = async (message) => {
-//   try {
-//     const admins = await User.find({ role: "admin" });
-//     for (const admin of admins) {
-//       if (admin.phone) {
-//         await client.messages.create({ body: message, from: TWILIO_PHONE, to: admin.phone });
-//       }
-//     }
-//   } catch (err) {
-//     console.error("SMS error:", err);
-//   }
-// };
+/* ================= EMAIL ================= */
+const mailer = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.MAIL_USER || "karaentonline@gmail.com",
+    pass: process.env.MAIL_PASS || "qayz eeiy xika wayy"
+  }
+});
+const sendEmail = async ({ to, subject, html }) => {
+  await mailer.sendMail({ from: `"Kara Store" <no-reply@karaenterprises.com>`, to, subject, html });
+};
 
 /* ================= ROUTES ================= */
+/* ---------- HEALTH CHECK ---------- */
+app.get("/api/health", async (req, res) => {
+  try {
+    await dbConnect();
+    res.json({ status: "ok", db: "connected" });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
 /* ---------- AUTH ---------- */
 app.post("/api/register", async (req, res) => {
   try {
@@ -247,8 +252,9 @@ app.post("/api/register", async (req, res) => {
 
     res.json(user);
   } catch (error) {
+    console.error("REGISTER ERROR:", error);
     if (error.code === 11000) res.status(400).json({ message: "Email already exists" });
-    else res.status(500).json({ message: "Failed to register user" });
+    else res.status(500).json({ message: "Failed to register user", detail: error.message });
   }
 });
 
@@ -445,22 +451,7 @@ app.delete("/api/admin/email-templates/:id", auth, adminAuth, async (req, res) =
 });
 
 
-const mailer = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.MAIL_USER || "karaentonline@gmail.com",
-    pass: process.env.MAIL_PASS || "qayz eeiy xika wayy"
-  }
-});
 
-const sendEmail = async ({ to, subject, html }) => {
-  await mailer.sendMail({
-    from: `"Flipkart Clone" <no-reply@karaenterprises.com>`,
-    to,
-    subject,
-    html
-  });
-};
 app.post("/api/admin/email/promo", auth, adminAuth, async (req, res) => {
   try {
     const { templateKey, data } = req.body;
@@ -1174,6 +1165,11 @@ app.get("/api/admin/stats", auth, adminAuth, async (req, res) => {
 });
 
 /* ================= SERVER ================= */
-// app.listen(5000, () => console.log("Server running → http://localhost:5000"));
+// Local dev
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => console.log(`Server running → http://localhost:${PORT}`));
+}
+
 module.exports = app;
 module.exports.handler = serverless(app);
