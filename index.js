@@ -18,9 +18,12 @@ app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
 /* ================= CORS ================= */
 const corsOptions = {
-  origin: ["https://kara-ent.vercel.app", "http://localhost:5173"],
+  origin: function (origin, callback) {
+    // Dynamically allow any origin (e.g. localhost, Vercel preview URLs, production domains)
+    callback(null, true);
+  },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   credentials: true
 };
 app.use(cors(corsOptions));
@@ -925,7 +928,7 @@ app.post("/api/payment/create-order", auth, async (req, res) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     const razorpayOrder = await razorpay.orders.create({
-      amount: order.totalAmount * 100,
+      amount: Math.round(order.totalAmount * 100),
       currency: "INR",
       receipt: `order_${order._id}`
     });
