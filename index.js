@@ -13,21 +13,40 @@ const cors = require("cors");
 const serverless = require("serverless-http");
 require('dotenv').config();
 const app = express();
+
+/* ================= BULLETPROOF CORS MIDDLEWARE ================= */
+const allowedOrigins = [
+  "https://www.sndropshipping.com",
+  "https://sndropshipping.com",
+  "https://kara-ent.vercel.app",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174"
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (allowedOrigins.includes(origin) || origin.endsWith(".vercel.app") || origin.includes("localhost") || origin.includes("127.0.0.1"))) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  // Instantly respond 200 to OPTIONS preflight requests so Vercel serverless never blocks them
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  next();
+});
+
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
-
-/* ================= CORS ================= */
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Dynamically allow any origin (e.g. localhost, Vercel preview URLs, production domains)
-    callback(null, true);
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-  credentials: true
-};
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
 
 /* ================= CONFIG ================= */
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretjwtkey";
