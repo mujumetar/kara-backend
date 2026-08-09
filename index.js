@@ -981,6 +981,23 @@ app.delete("/api/slider/:id", auth, adminAuth, async (req, res) => {
 });
 
 /* ================= RAZORPAY ================= */
+app.post("/api/payment/cod", auth, async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      { paymentId: "COD", status: "Confirmed" },
+      { new: true }
+    );
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    await User.findByIdAndUpdate(order.userId, { cart: [] });
+    res.json({ success: true, order });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "COD confirmation failed" });
+  }
+});
+
 app.post("/api/payment/create-order", auth, async (req, res) => {
   try {
     const { orderId } = req.body;
@@ -988,10 +1005,11 @@ app.post("/api/payment/create-order", auth, async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const razorpayOrder = await getRazorpay().orders.create({
+    const rzp = getRazorpay();
+    const razorpayOrder = await rzp.orders.create({
       amount: Math.round(order.totalAmount * 100),
       currency: "INR",
-      receipt: `order_${order._id}`
+      receipt: `rcpt_${order._id.toString().slice(-8)}`
     });
 
     res.json({
@@ -1000,8 +1018,11 @@ app.post("/api/payment/create-order", auth, async (req, res) => {
       currency: "INR"
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to create Razorpay order" });
+    console.error("Razorpay create-order error:", error?.error || error?.message || error);
+    res.status(500).json({
+      message: "Failed to create Razorpay order",
+      detail: error?.error?.description || error?.message || "Unknown error"
+    });
   }
 });
 
