@@ -86,7 +86,7 @@ const razorpay = new Razorpay({
 });
 
 /* ================= MODELS ================= */
-const User = mongoose.model("User", new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
   name: String,
   email: { type: String, unique: true },
   password: String,
@@ -103,12 +103,15 @@ const User = mongoose.model("User", new mongoose.Schema({
     quantity: { type: Number, default: 1 },
     image: String
   }]
-}, { timestamps: true }));
+}, { timestamps: true });
 
-const Category = mongoose.model("Category", new mongoose.Schema({
+const User = mongoose.models.User || mongoose.model("User", UserSchema);
+
+const CategorySchema = new mongoose.Schema({
   name: String,
   subcategories: [String]
-}));
+});
+const Category = mongoose.models.Category || mongoose.model("Category", CategorySchema);
 
 const ProductSchema = new mongoose.Schema({
   title: { type: String, required: true },
@@ -129,11 +132,11 @@ const ProductSchema = new mongoose.Schema({
   avgRating: { type: Number, default: 0 }
 }, { timestamps: true });
 
-const Product = mongoose.model("Product", ProductSchema);
+const Product = mongoose.models.Product || mongoose.model("Product", ProductSchema);
 
 const renderTemplate = (html, data = {}) => html.replace(/\{\{(.*?)\}\}/g, (_, key) => data[key.trim()] ?? "");
 
-const Order = mongoose.model("Order", new mongoose.Schema({
+const OrderSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   products: [{
     _id: String,
@@ -149,13 +152,16 @@ const Order = mongoose.model("Order", new mongoose.Schema({
     enum: ["Pending", "Processing", "Confirmed", "Shipped", "Delivered"],
     default: "Pending"
   }
-}, { timestamps: true }));
+}, { timestamps: true });
 
-const Slider = mongoose.model("Slider", new mongoose.Schema({
+const Order = mongoose.models.Order || mongoose.model("Order", OrderSchema);
+
+const SliderSchema = new mongoose.Schema({
   title: String,
   image: String,
   link: String
-}));
+});
+const Slider = mongoose.models.Slider || mongoose.model("Slider", SliderSchema);
 
 
 let cached = global.mongoose;
@@ -189,7 +195,7 @@ async function dbConnect() {
 }
 
 
-const EmailTemplate = mongoose.model("EmailTemplate", new mongoose.Schema({
+const EmailTemplateSchema = new mongoose.Schema({
   name: { type: String, required: true },
   key: { type: String, required: true, unique: true, trim: true, lowercase: true },
   subject: { type: String, required: true },
@@ -197,7 +203,9 @@ const EmailTemplate = mongoose.model("EmailTemplate", new mongoose.Schema({
   variables: [String],
   isActive: { type: Boolean, default: true },
   type: { type: String, enum: ["transactional", "marketing"], default: "transactional", required: true }
-}, { timestamps: true }));
+}, { timestamps: true });
+
+const EmailTemplate = mongoose.models.EmailTemplate || mongoose.model("EmailTemplate", EmailTemplateSchema);
 
 /* ================= MIDDLEWARE ================= */
 const auth = async (req, res, next) => {
