@@ -19,7 +19,6 @@ const allowedOrigins = [
   "https://www.sndropshipping.com",
   "https://sndropshipping.com",
   "https://kara-ent.vercel.app",
-  "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:5174",
   "http://127.0.0.1:5174",
@@ -49,6 +48,17 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
+
+// Ensure DB is connected before every request
+app.use(async (req, res, next) => {
+  try {
+    await dbConnect();
+    next();
+  } catch (err) {
+    console.error("DB connection failed:", err.message);
+    res.status(503).json({ message: "Database unavailable", detail: err.message });
+  }
+});
 
 /* ================= CONFIG ================= */
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretjwtkey";
@@ -687,6 +697,7 @@ app.post(
   });
 app.get("/api/products", async (req, res) => {
   try {
+    await dbConnect();
     const { category, subcategory, minPrice, maxPrice, search } = req.query;
     let filter = {};
     if (search) filter.title = { $regex: search, $options: 'i' };
@@ -697,7 +708,7 @@ app.get("/api/products", async (req, res) => {
     res.json(await Product.find(filter));
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Failed to fetch products" });
+    res.status(500).json({ message: "Failed to fetch products", detail: error.message });
   }
 });
 
@@ -1213,6 +1224,101 @@ app.get("/api/admin/stats", auth, adminAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to fetch stats" });
+  }
+});
+
+/* ================= SEED ================= */
+app.get("/api/seed", async (req, res) => {
+  try {
+    const count = await Product.countDocuments();
+    if (count > 0) return res.json({ message: `Already has ${count} products. Skipping seed.` });
+
+    // Seed categories
+    const existingCats = await Category.countDocuments();
+    if (existingCats === 0) {
+      await Category.insertMany([
+        { name: "Electronics", subcategories: ["Phones", "Laptops", "Audio", "Accessories"] },
+        { name: "Fashion", subcategories: ["Men", "Women", "Kids", "Footwear"] },
+        { name: "Home & Office", subcategories: ["Furniture", "Lighting", "Decor", "Storage"] },
+        { name: "Sports", subcategories: ["Fitness", "Outdoor", "Yoga", "Cycling"] },
+      ]);
+    }
+
+    // Seed products
+    const products = [
+      {
+        title: "Premium Wireless Earbuds Pro",
+        price: 2999,
+        wholesalePrice: 1199,
+        description: "High-fidelity wireless earbuds with active noise cancellation, 30-hour battery life, and premium sound quality. Perfect for music lovers and professionals.",
+        category: "Electronics",
+        subcategory: "Audio",
+        stock: 150,
+        images: ["https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&h=600&fit=crop&auto=format"],
+        avgRating: 4.8,
+      },
+      {
+        title: "Smart Fitness Tracker Watch",
+        price: 4499,
+        wholesalePrice: 1799,
+        description: "Advanced fitness tracker with heart rate monitor, sleep tracking, GPS, and 7-day battery. Water resistant up to 50m. Compatible with iOS and Android.",
+        category: "Electronics",
+        subcategory: "Accessories",
+        stock: 89,
+        images: ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&h=600&fit=crop&auto=format"],
+        avgRating: 4.7,
+      },
+      {
+        title: "Minimalist Genuine Leather Wallet",
+        price: 1299,
+        wholesalePrice: 449,
+        description: "Slim bifold wallet crafted from full-grain genuine leather. RFID blocking technology. Holds 8 cards and cash. Available in black and brown.",
+        category: "Fashion",
+        subcategory: "Accessories",
+        stock: 220,
+        images: ["https://images.unsplash.com/photo-1627123424574-724758594785?w=600&h=600&fit=crop&auto=format"],
+        avgRating: 4.9,
+      },
+      {
+        title: "LED Adjustable Desk Lamp",
+        price: 1799,
+        wholesalePrice: 699,
+        description: "Modern LED desk lamp with 5 color temperatures, 10 brightness levels, USB charging port, and flexible arm. Perfect for study and work.",
+        category: "Home & Office",
+        subcategory: "Lighting",
+        stock: 175,
+        images: ["https://images.unsplash.com/photo-1593640408182-31c228745a9b?w=600&h=600&fit=crop&auto=format"],
+        avgRating: 4.6,
+      },
+      {
+        title: "Premium Non-Slip Yoga Mat",
+        price: 2199,
+        wholesalePrice: 849,
+        description: "Eco-friendly TPE yoga mat with superior grip, alignment lines, and carrying strap. 6mm thickness for joint support. Suitable for all yoga styles.",
+        category: "Sports",
+        subcategory: "Yoga",
+        stock: 130,
+        images: ["https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&h=600&fit=crop&auto=format"],
+        avgRating: 4.8,
+      },
+      {
+        title: "Stainless Steel Insulated Bottle",
+        price: 999,
+        wholesalePrice: 379,
+        description: "Double-wall vacuum insulated water bottle. Keeps drinks cold 24hrs, hot 12hrs. BPA free, leak-proof lid. Fits most car cup holders.",
+        category: "Sports",
+        subcategory: "Fitness",
+        stock: 310,
+        images: ["https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=600&h=600&fit=crop&auto=format"],
+        avgRating: 4.9,
+      },
+    ];
+
+    await Product.insertMany(products);
+    res.json({ success: true, message: `Seeded ${products.length} products and categories successfully.` });
+  } catch (error) {
+    console.error("Seed error:", error);
+    res.status(500).json({ message: "Seed failed", detail: error.message });
   }
 });
 
