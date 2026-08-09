@@ -61,7 +61,7 @@ app.use(async (req, res, next) => {
 });
 
 /* ================= CONFIG ================= */
-const JWT_SECRET = process.env.JWT_SECRET || "supersecretjwtkey";
+const JWT_SECRET = process.env.JWT_SECRET || "flipkart_secret";
 
 // Lazy-initialize Twilio — only when SMS is actually needed
 let _twilioClient = null;
@@ -79,9 +79,9 @@ const TWILIO_PHONE = process.env.TWILIO_PHONE || '+12055457341';
 
 /* ================= CLOUDINARY ================= */
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_NAME,
-  api_key: process.env.CLOUDINARY_KEY,
-  api_secret: process.env.CLOUDINARY_SECRET,
+  cloud_name: process.env.CLOUDINARY_NAME || "dlzy4t3i3",
+  api_key: process.env.CLOUDINARY_KEY || "983945937919249",
+  api_secret: process.env.CLOUDINARY_SECRET || "_DmbWP5XAr0O1ji7uubfb86rZbY",
 });
 
 let storage;
@@ -107,8 +107,8 @@ let _razorpay = null;
 const getRazorpay = () => {
   if (!_razorpay) {
     _razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY,
-      key_secret: process.env.RAZORPAY_SECRET
+      key_id: process.env.RAZORPAY_KEY || "rzp_test_RziTV0f7RSbzDC",
+      key_secret: process.env.RAZORPAY_SECRET || "9oRhO0RA8UZeq8DW78bVupv3"
     });
   }
   return _razorpay;
@@ -199,8 +199,10 @@ if (!cached) cached = global.mongoose = { conn: null, promise: null };
 async function dbConnect() {
   if (cached.conn) return cached.conn;
 
+  const uri = process.env.MONGO_URI || "mongodb+srv://muzammilmetar82_db_user:3oc9jc3eQT7SD5oQ@kara.nwlx3hc.mongodb.net/?appName=kara";
+
   if (!cached.promise) {
-    cached.promise = mongoose.connect(process.env.MONGO_URI, {
+    cached.promise = mongoose.connect(uri, {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
@@ -208,7 +210,6 @@ async function dbConnect() {
       console.log("MongoDB connected");
       return m;
     }).catch(err => {
-      // Reset so next request retries instead of reusing a failed promise
       cached.promise = null;
       throw err;
     });
