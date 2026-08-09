@@ -53,10 +53,17 @@ app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 /* ================= CONFIG ================= */
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretjwtkey";
 
-const client = twilio(
-  process.env.TWILIO_SID || 'AC8cef5806b7ff1158a3f8b1cab10d580f',
-  process.env.TWILIO_AUTH_TOKEN || '91f6a0ce2de2d16e683620c6049f76bb'
-);
+// Lazy-initialize Twilio — only when SMS is actually needed
+let _twilioClient = null;
+const getTwilioClient = () => {
+  if (!_twilioClient) {
+    _twilioClient = twilio(
+      process.env.TWILIO_SID || 'AC8cef5806b7ff1158a3f8b1cab10d580f',
+      process.env.TWILIO_AUTH_TOKEN || '91f6a0ce2de2d16e683620c6049f76bb'
+    );
+  }
+  return _twilioClient;
+};
 const TWILIO_PHONE = process.env.TWILIO_PHONE || '+12055457341';
 
 
@@ -67,23 +74,35 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_SECRET,
 });
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: { folder: "flipkart", allowed_formats: ["jpg", "png", "jpeg"] },
-});
+let storage;
+try {
+  storage = new CloudinaryStorage({
+    cloudinary,
+    params: { folder: "flipkart", allowed_formats: ["jpg", "png", "jpeg"] },
+  });
+} catch (e) {
+  console.error("Cloudinary storage init failed:", e.message);
+  storage = multer.memoryStorage();
+}
+
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB per image
-  }
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 
 /* ================= RAZORPAY ================= */
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY,
-  key_secret: process.env.RAZORPAY_SECRET
-});
+// Lazy-initialize Razorpay — only when payment routes are called
+let _razorpay = null;
+const getRazorpay = () => {
+  if (!_razorpay) {
+    _razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY,
+      key_secret: process.env.RAZORPAY_SECRET
+    });
+  }
+  return _razorpay;
+};
 
 /* ================= MODELS ================= */
 const UserSchema = new mongoose.Schema({
@@ -371,7 +390,7 @@ async function sendAdminSMS(message) {
     for (const admin of admins) {
       if (admin.phone) {
         try {
-          await client.messages.create({
+          await getTwilioClient().messages.create({
             body: message,
             from: process.env.TWILIO_PHONE,
             to: admin.phone
@@ -957,7 +976,7 @@ app.post("/api/payment/create-order", auth, async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const razorpayOrder = await razorpay.orders.create({
+    const razorpayOrder = await getRazorpay().orders.create({
       amount: Math.round(order.totalAmount * 100),
       currency: "INR",
       receipt: `order_${order._id}`
