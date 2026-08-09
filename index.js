@@ -22,7 +22,9 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:5174",
-  "http://127.0.0.1:5174"
+  "http://127.0.0.1:5174",
+  "http://localhost:5175",
+  "http://127.0.0.1:5175",
 ];
 
 app.use((req, res, next) => {
@@ -111,6 +113,7 @@ const Category = mongoose.model("Category", new mongoose.Schema({
 const ProductSchema = new mongoose.Schema({
   title: { type: String, required: true },
   price: { type: Number, required: true },
+  wholesalePrice: { type: Number, default: null },
   images: [String],
   category: String,
   subcategory: String,
