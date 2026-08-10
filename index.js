@@ -151,11 +151,21 @@ const ProductSchema = new mongoose.Schema({
   subcategory: String,
   description: String,
   stock: Number,
+  sizes: [String],
+  colors: [String],
+  baseOrderCount: { type: Number, default: 0 },
   reviews: [{
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     name: String,
-    rating: { type: Number, min: 1, max: 5, required: true },
+    rating: { type: Number, min: 1, max: 5 },
     comment: String,
+    isAdminReview: { type: Boolean, default: false },
+    comments: [{
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+      name: String,
+      comment: String,
+      createdAt: { type: Date, default: Date.now }
+    }],
     createdAt: { type: Date, default: Date.now }
   }],
   avgRating: { type: Number, default: 0 }
@@ -743,6 +753,8 @@ app.get("/api/products/:id", async (req, res) => {
       name: r.name || r.userId?.name || "Anonymous",
       rating: r.rating,
       comment: r.comment,
+      isAdminReview: r.isAdminReview,
+      comments: r.comments,
       createdAt: r.createdAt
     }));
 
@@ -817,6 +829,64 @@ app.post("/api/products/:id/review", auth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to add review" });
+  }
+});
+
+// ⭐ Add Admin Review
+app.post("/api/products/:id/admin-review", auth, adminAuth, async (req, res) => {
+  try {
+    const { comment } = req.body;
+    if (!comment) return res.status(400).json({ message: "Comment is required" });
+
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    const user = await User.findById(req.user.id);
+
+    product.reviews.push({
+      userId: req.user.id,
+      name: user.name || "Admin",
+      comment,
+      isAdminReview: true
+    });
+
+    await product.save();
+
+    const populatedProduct = await Product.findById(req.params.id).populate("reviews.userId", "name");
+    res.json({ success: true, reviews: populatedProduct.reviews });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to add admin review" });
+  }
+});
+
+// ⭐ Add Comment to Review
+app.post("/api/products/:id/reviews/:reviewId/comment", auth, async (req, res) => {
+  try {
+    const { comment } = req.body;
+    if (!comment) return res.status(400).json({ message: "Comment is required" });
+
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    const review = product.reviews.id(req.params.reviewId);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+
+    const user = await User.findById(req.user.id);
+
+    review.comments.push({
+      userId: req.user.id,
+      name: user.name || "Anonymous",
+      comment
+    });
+
+    await product.save();
+    
+    const populatedProduct = await Product.findById(req.params.id).populate("reviews.userId", "name");
+    res.json({ success: true, reviews: populatedProduct.reviews });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to add comment" });
   }
 });
 
